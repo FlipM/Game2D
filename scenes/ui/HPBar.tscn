@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://hpbar_scene"]
+
+[ext_resource type="Script" path="res://scripts/ui/HPBar.gd" id="1"]
+
+[node name="HPBar" type="ProgressBar"]
+offset_right = 32.0
+offset_bottom = 6.0
+z_index = 15
+script = ExtResource("1")

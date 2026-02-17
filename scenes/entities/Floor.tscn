@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://d8k9k8s3s2e2x"]
+
+[ext_resource type="Texture2D" path="res://assets/tileset.png" id="1_texture_Floor"]
+
+[node name="Floor" type="Sprite2D"]
+texture = ExtResource("1_texture_Floor")
+region_enabled = true
+region_rect = Rect2(96, 128, 32, 32)
+zIndex = -1

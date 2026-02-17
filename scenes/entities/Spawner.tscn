@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://spawner_scene"]
+
+[ext_resource type="Script" path="res://scripts/core/Spawner.gd" id="1"]
+
+[node name="Spawner" type="Node2D"]
+script = ExtResource("1")
+spawn_interval = 10.0
+max_creatures = 5

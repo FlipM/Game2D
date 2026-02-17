@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3 uid="uid://c6s7j8i2b2e3z"]
+
+[ext_resource type="Texture2D" path="res://assets/tileset.png" id="1_texture_Wall"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(32, 32)
+
+[node name="Wall" type="StaticBody2D"]
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("1_texture_Wall")
+region_enabled = true
+region_rect = Rect2(96, 64, 32, 32)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_1")

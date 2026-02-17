@@ -1,0 +1,22 @@
+config_version=5
+
+[application]
+
+config/name="Game2D"
+run/main_scene="res://scenes/ui/Main.tscn"
+config/features=PackedStringArray("4.3", "Mobile")
+config/icon="res://assets/player.png"
+
+[audio]
+
+driver="Dummy"
+
+[display]
+
+window/size/viewport_width=1152
+window/size/viewport_height=648
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
