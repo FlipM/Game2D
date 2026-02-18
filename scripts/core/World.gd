@@ -11,10 +11,40 @@ const TILE_SIZE = 32
 # We want 10x10 floor. 
 var center_pos = Vector2(1152/2, 648/2)
 
+class GridAStar extends AStar2D:
+	func _compute_cost(from_id, to_id):
+		var from_pos = get_point_position(from_id)
+		var to_pos = get_point_position(to_id)
+		var dist = from_pos.distance_to(to_pos)
+		if dist > 33: # Diagonal (approx 45.25)
+			return 2.1 # Higher than 2.0 to prioritize straight lines
+		return 1.0
+
+	func _estimate_cost(from_id, to_id):
+		var from_pos = get_point_position(from_id)
+		var to_pos = get_point_position(to_id)
+		return from_pos.distance_to(to_pos) / 32.0
+
+var astar = GridAStar.new()
+var world_to_id = {}
+
+# Robust Mapping: Using round() ensures we get the nearest tile even with floating point drifts
+func get_tile_coords(pos: Vector2) -> Vector2i:
+	return Vector2i((pos - center_pos) / TILE_SIZE).snapped(Vector2i.ONE) 
+	# Note: .snapped on Vector2i is not available in all versions, 
+	# let's use a more manual robust approach:
+	# var offset = pos - center_pos
+	# return Vector2i(round(offset.x / TILE_SIZE), round(offset.y / TILE_SIZE))
+
+func get_tile_coords_robust(pos: Vector2) -> Vector2i:
+	var offset = pos - center_pos
+	return Vector2i(round(offset.x / TILE_SIZE), round(offset.y / TILE_SIZE))
+
 func _ready():
 	add_to_group("world")
 	_generate_arena()
 	_setup_spawners()
+	_setup_astar()
 	
 	# Setup custom spawn function
 	$MultiplayerSpawner.spawn_function = _spawn_player
@@ -31,6 +61,99 @@ func _ready():
 		for id in multiplayer.get_peers():
 			add_player(id)
 		add_player(1)
+
+func _setup_astar():
+	astar.clear()
+	world_to_id.clear()
+	
+	# We know the arena is from -6 to 6 (walls included)
+	for x in range(-6, 7):
+		for y in range(-6, 7):
+			var pos = center_pos + Vector2(x * TILE_SIZE, y * TILE_SIZE)
+			var id = astar.get_available_point_id()
+			
+			# Check if there's a wall here
+			var is_wall = false
+			if abs(x) > 5 or abs(y) > 5:
+				is_wall = true
+			
+			if not is_wall:
+				astar.add_point(id, pos)
+				world_to_id[Vector2i(x,y)] = id
+	
+	# Connect points
+	for x in range(-5, 6):
+		for y in range(-5, 6):
+			var current_id = world_to_id.get(Vector2i(x,y), -1)
+			if current_id == -1: continue
+			
+			# Neighbors (including diagonals)
+			for dx in range(-1, 2):
+				for dy in range(-1, 2):
+					if dx == 0 and dy == 0: continue
+					
+					var neighbor_pos = Vector2i(x + dx, y + dy)
+					var neighbor_id = world_to_id.get(neighbor_pos, -1)
+					
+					if neighbor_id != -1:
+						astar.connect_points(current_id, neighbor_id, true)
+
+func get_astar_path(from_pos: Vector2, to_pos: Vector2, exclude_entity: Node = null) -> PackedVector2Array:
+	var start_id = astar.get_closest_point(from_pos)
+	var end_id = astar.get_closest_point(to_pos)
+	
+	if start_id == -1 or end_id == -1:
+		return PackedVector2Array()
+	
+	# Temporarily disable points occupied/reserved by others
+	var disabled_points = []
+	var entities = get_tree().get_nodes_in_group("players") + get_tree().get_nodes_in_group("creatures")
+	var target_coords = get_tile_coords_robust(to_pos)
+	
+	for entity in entities:
+		if not is_instance_valid(entity) or entity == exclude_entity:
+			continue
+		
+		# Check both current position and intended target (reservation)
+		var movement = entity.get_node_or_null("MovementComponent")
+		if not movement: continue
+		
+		var current_coords = get_tile_coords_robust(entity.global_position)
+		var reserved_coords = get_tile_coords_robust(movement.target_position)
+		
+		for coords in [current_coords, reserved_coords]:
+			if coords != target_coords:
+				var id = world_to_id.get(coords, -1)
+				if id != -1 and id != end_id and not astar.is_point_disabled(id):
+					astar.set_point_disabled(id, true)
+					disabled_points.append(id)
+	
+	var path = astar.get_point_path(start_id, end_id)
+	
+	# Re-enable points
+	for id in disabled_points:
+		astar.set_point_disabled(id, false)
+		
+	return path
+
+func is_tile_occupied(pos: Vector2, exclude_entity: Node = null) -> bool:
+	var check_coords = get_tile_coords_robust(pos)
+	var entities = get_tree().get_nodes_in_group("players") + get_tree().get_nodes_in_group("creatures")
+	
+	for entity in entities:
+		if not is_instance_valid(entity) or entity == exclude_entity:
+			continue
+		
+		var movement = entity.get_node_or_null("MovementComponent")
+		if not movement: continue
+		
+		# A tile is occupied if an entity is physically there OR has reserved it (target_position)
+		var entity_coords = get_tile_coords_robust(entity.global_position)
+		var reserved_coords = get_tile_coords_robust(movement.target_position)
+		
+		if entity_coords == check_coords or reserved_coords == check_coords:
+			return true
+	return false
 
 func _spawn_player(data):
 	var id = data[0]

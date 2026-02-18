@@ -17,7 +17,7 @@ class_name Creature
 @export var is_attacking_player: bool = false
 
 var move_timer = 0.0
-var move_interval = 1.0
+var move_interval = 0.5
 
 func _ready():
 	_apply_stats()
@@ -46,6 +46,10 @@ func _handle_ai(delta):
 		move_timer = 0.0
 
 func _decide_movement():
+	var player = _find_nearest_player()
+	if player and combat.is_in_range(self, player):
+		return # Already in range, stay put to attack
+		
 	match aggression_type:
 		"Aggressive":
 			_move_towards_player()
@@ -61,13 +65,14 @@ func _move_randomly():
 func _move_towards_player():
 	var player = _find_nearest_player()
 	if player:
-		var diff = player.global_position - global_position
-		var direction = Vector2.ZERO
-		if abs(diff.x) > abs(diff.y):
-			direction = Vector2.RIGHT if diff.x > 0 else Vector2.LEFT
-		else:
-			direction = Vector2.DOWN if diff.y > 0 else Vector2.UP
-		movement.try_move(direction)
+		var world = get_tree().get_first_node_in_group("world")
+		if world:
+			# Pass self to exclude_entity
+			var path = world.get_astar_path(global_position, player.global_position, self)
+			if path.size() > 1:
+				var direction = (path[1] - global_position).normalized()
+				var moved = movement.try_move(direction)
+				# If try_move fails (tile contested), it's fine, we'll try again in 0.5s
 	else:
 		_move_randomly()
 
