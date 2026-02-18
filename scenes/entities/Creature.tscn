@@ -27,20 +27,22 @@ properties/3/replication_mode = 1
 size = Vector2(28, 28)
 
 [node name="Creature" type="CharacterBody2D"]
+y_sort_enabled = true
 script = ExtResource("1")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectangleShape2D_creature")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-z_index = 10
+y_sort_enabled = true
+hframes = 9
+vframes = 8
 
 [node name="HPBar" parent="." instance=ExtResource("2")]
 offset_left = -16.0
 offset_top = -24.0
 offset_right = 16.0
 offset_bottom = -18.0
-z_index = 15
 
 [node name="Highlights" parent="." instance=ExtResource("8")]
 

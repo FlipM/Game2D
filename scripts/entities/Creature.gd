@@ -23,6 +23,8 @@ func _ready():
 	_apply_stats()
 	visuals.setup(health, combat)
 	health.died.connect(die)
+	if movement:
+		movement.direction_changed.connect(visuals.update_facing)
 
 func _apply_stats():
 	health.max_health = max_hp
@@ -104,12 +106,14 @@ func _handle_combat_logic():
 
 func _find_nearest_player():
 	var players = get_tree().get_nodes_in_group("players")
-	return players.reduce(func(min_p, p): 
+	return players.reduce(func(min_p, p):
 		return p if not min_p or global_position.distance_to(p.global_position) < global_position.distance_to(min_p.global_position) else min_p
 	, null)
 
 func take_damage(amount: int):
 	health.take_damage(amount)
+	if multiplayer.is_server() and amount > 0:
+		spawn_damage_number.rpc(amount, Color.WHITE)
 
 @rpc("any_peer", "call_local")
 func spawn_damage_number(amount: int, color: Color):

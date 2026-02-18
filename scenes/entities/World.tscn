@@ -5,15 +5,18 @@
 [ext_resource type="PackedScene" uid="uid://playerhud_scene" path="res://scenes/ui/PlayerHUD.tscn" id="3_player_hud"]
 
 [node name="World" type="Node2D"]
+y_sort_enabled = true
 script = ExtResource("1_scripts_World")
 
 [node name="Players" type="Node2D" parent="."]
+y_sort_enabled = true
 
 [node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="."]
 _spawnable_scenes = PackedStringArray("res://scenes/entities/Player.tscn")
 spawn_path = NodePath("../Players")
 
 [node name="Creatures" type="Node2D" parent="."]
+y_sort_enabled = true
 
 [node name="CreatureSpawner" type="MultiplayerSpawner" parent="."]
 _spawnable_scenes = PackedStringArray("res://scenes/entities/Rat.tscn")

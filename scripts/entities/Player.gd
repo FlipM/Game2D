@@ -25,9 +25,14 @@ func _ready():
 	visuals.setup(health, combat)
 	health.died.connect(die)
 	
-	if is_multiplayer_authority():
+	if movement:
+		movement.direction_changed.connect(visuals.update_facing)
+	
+	if multiplayer.is_server():
 		combat.attacked.connect(_on_attacked)
 		health.damaged.connect(_on_damaged)
+	
+	if is_multiplayer_authority():
 		$Camera2D.enabled = true
 
 func _apply_stats():
@@ -121,11 +126,19 @@ func add_to_log(text: String):
 		hud.add_log(text)
 
 func _on_attacked(target, damage):
+	if not multiplayer.is_server(): return
+	
 	var target_name = "Creature"
 	if "unit_name" in target:
 		target_name = target.unit_name
-	add_to_log.rpc("You hit %s for %d damage" % [target_name, damage])
+	
+	var peer_id = get_multiplayer_authority()
+	add_to_log.rpc_id(peer_id, "You hit %s for %d damage" % [target_name, damage])
 
 func _on_damaged(amount):
+	if not multiplayer.is_server(): return
+	
 	if amount > 0:
-		add_to_log.rpc("You took %d damage!" % amount)
+		var peer_id = get_multiplayer_authority()
+		add_to_log.rpc_id(peer_id, "You took %d damage!" % amount)
+		spawn_damage_number.rpc(amount, Color.RED)

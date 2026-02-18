@@ -31,6 +31,7 @@ properties/4/replication_mode = 1
 size = Vector2(28, 28)
 
 [node name="Player" type="CharacterBody2D" groups=["players"]]
+y_sort_enabled = true
 script = ExtResource("1_scripts_Player")
 unit_name = "Player"
 max_hp = 100
@@ -45,11 +46,11 @@ regen_interval = 2.0
 shape = SubResource("RectangleShape2D_player")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
+y_sort_enabled = true
 texture = ExtResource("2_texture_Icon")
 hframes = 9
-vframes = 7
+vframes = 5
 frame = 0
-z_index = 10
 
 [node name="Highlights" parent="." instance=ExtResource("10")]
 
@@ -58,7 +59,6 @@ offset_left = -16.0
 offset_top = -24.0
 offset_right = 16.0
 offset_bottom = -18.0
-z_index = 15
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("5")
@@ -76,6 +76,9 @@ hp_bar = NodePath("../HPBar")
 target_highlight = NodePath("../Highlights/TargetHighlight")
 attacker_highlight = NodePath("../Highlights/AttackerHighlight")
 damage_number_scene = ExtResource("9")
+use_directional_sprites = true
+sprite_offset_y = -12.0
+horizontal_priority = true
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SceneReplicationConfig_1")

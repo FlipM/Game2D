@@ -4,6 +4,7 @@ class_name MovementComponent
 
 signal movement_started
 signal movement_finished
+signal direction_changed(direction: Vector2)
 
 @export var speed: float = 100.0
 @export var tile_size: int = 32
@@ -78,6 +79,7 @@ func _physics_process(_delta):
 				_finish_movement()
 			else:
 				target_position = next_pos
+				direction_changed.emit((target_position - parent_body.global_position).normalized())
 				current_path.remove_at(0)
 		elif is_moving:
 			_finish_movement()
@@ -120,6 +122,7 @@ func try_move(direction: Vector2) -> bool:
 	
 	# Reserve the target immediately
 	target_position = new_target
+	direction_changed.emit(direction)
 	is_moving = true 
 	movement_started.emit()
 	stuck_timer = 0.0
@@ -137,6 +140,7 @@ func move_to(path: PackedVector2Array):
 		var world = get_tree().get_first_node_in_group("world")
 		if world and not world.is_tile_occupied(next_pos, parent_body):
 			target_position = next_pos
+			direction_changed.emit((target_position - parent_body.global_position).normalized())
 			current_path.remove_at(0)
 			is_moving = true
 			movement_started.emit()
