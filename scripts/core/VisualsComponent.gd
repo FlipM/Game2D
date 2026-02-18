@@ -129,7 +129,8 @@ func _on_health_changed(current, maximum):
 
 func _on_damaged(amount):
 	if amount > 0:
-		spawn_damage_number(amount, Color.RED if get_parent().is_in_group("players") else Color.WHITE)
+		var color = GameConstants.PLAYER_COLOR if get_parent().is_in_group("players") else GameConstants.ENEMY_COLOR
+		spawn_damage_number(amount, color)
 
 func _on_target_changed(new_target):
 	if target_highlight:
@@ -147,9 +148,8 @@ func spawn_damage_number(amount: int, color: Color):
 	dn.set_values(amount, color)
 	
 	# Center it: Start at parent global pos, move up, and center horizontally
-	# Assuming a reasonable label width, centering on its own position is handled by alignment
-	dn.global_position = get_parent().global_position + Vector2(-100, -32) # -100 to half-offset a 200px centered label
-	dn.size = Vector2(200, 20)
+	dn.global_position = get_parent().global_position + GameConstants.DAMAGE_NUMBER_CENTER_OFFSET
+	dn.size = GameConstants.DAMAGE_NUMBER_SIZE
 	
 	if dn.has_method("start_animation"):
 		dn.start_animation()

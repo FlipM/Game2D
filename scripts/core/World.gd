@@ -6,31 +6,33 @@ const FLOOR_SCENE = preload("res://scenes/entities/Floor.tscn")
 const SPAWNER_SCENE = preload("res://scenes/entities/Spawner.tscn")
 const RAT_SCENE = preload("res://scenes/entities/Rat.tscn")
 
-const TILE_SIZE = 32
-# Center of 1152x648 is approx 576, 324. 
-# We want 10x10 floor. 
-var center_pos = Vector2(1152/2, 648/2)
+@onready var TILE_SIZE = GameConstants.TILE_SIZE
+var ARENA_RADIUS = 5
+var BOUNDARY_RADIUS = 6
+const DIAGONAL_THRESHOLD_OFFSET = 1.0
+
+@onready var center_pos = GameConstants.WORLD_CENTER
 
 class GridAStar extends AStar2D:
 	func _compute_cost(from_id, to_id):
 		var from_pos = get_point_position(from_id)
 		var to_pos = get_point_position(to_id)
 		var dist = from_pos.distance_to(to_pos)
-		if dist > 33: # Diagonal (approx 45.25)
+		if dist > GameConstants.TILE_SIZE + 1.0: # Diagonal (approx 45.25)
 			return 2.1 # Higher than 2.0 to prioritize straight lines
 		return 1.0
 
 	func _estimate_cost(from_id, to_id):
 		var from_pos = get_point_position(from_id)
 		var to_pos = get_point_position(to_id)
-		return from_pos.distance_to(to_pos) / 32.0
+		return from_pos.distance_to(to_pos) / float(GameConstants.TILE_SIZE)
 
 var astar = GridAStar.new()
 var world_to_id = {}
 
 # Robust Mapping: Using round() ensures we get the nearest tile even with floating point drifts
 func get_tile_coords(pos: Vector2) -> Vector2i:
-	return Vector2i((pos - center_pos) / TILE_SIZE).snapped(Vector2i.ONE) 
+	return Vector2i((pos - center_pos) / TILE_SIZE).snapped(Vector2i.ONE)
 	# Note: .snapped on Vector2i is not available in all versions, 
 	# let's use a more manual robust approach:
 	# var offset = pos - center_pos
@@ -66,25 +68,25 @@ func _setup_astar():
 	astar.clear()
 	world_to_id.clear()
 	
-	# We know the arena is from -6 to 6 (walls included)
-	for x in range(-6, 7):
-		for y in range(-6, 7):
+	# Iterate boundary nodes
+	for x in range(-BOUNDARY_RADIUS, BOUNDARY_RADIUS + 1):
+		for y in range(-BOUNDARY_RADIUS, BOUNDARY_RADIUS + 1):
 			var pos = center_pos + Vector2(x * TILE_SIZE, y * TILE_SIZE)
 			var id = astar.get_available_point_id()
 			
 			# Check if there's a wall here
 			var is_wall = false
-			if abs(x) > 5 or abs(y) > 5:
+			if abs(x) > ARENA_RADIUS or abs(y) > ARENA_RADIUS:
 				is_wall = true
 			
 			if not is_wall:
 				astar.add_point(id, pos)
-				world_to_id[Vector2i(x,y)] = id
+				world_to_id[Vector2i(x, y)] = id
 	
-	# Connect points
-	for x in range(-5, 6):
-		for y in range(-5, 6):
-			var current_id = world_to_id.get(Vector2i(x,y), -1)
+	# Connect points within inner arena
+	for x in range(-ARENA_RADIUS, ARENA_RADIUS + 1):
+		for y in range(-ARENA_RADIUS, ARENA_RADIUS + 1):
+			var current_id = world_to_id.get(Vector2i(x, y), -1)
 			if current_id == -1: continue
 			
 			# Neighbors (including diagonals)

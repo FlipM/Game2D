@@ -7,7 +7,7 @@ signal movement_finished
 signal direction_changed(direction: Vector2)
 
 @export var speed: float = 100.0
-@export var tile_size: int = 32
+var tile_size: int = GameConstants.TILE_SIZE
 
 var target_position: Vector2 = Vector2.ZERO
 var is_moving: bool = false
@@ -123,7 +123,7 @@ func try_move(direction: Vector2) -> bool:
 	# Reserve the target immediately
 	target_position = new_target
 	direction_changed.emit(direction)
-	is_moving = true 
+	is_moving = true
 	movement_started.emit()
 	stuck_timer = 0.0
 	return true

@@ -21,6 +21,8 @@ func _ready():
 	# Spawn one immediately
 	_spawn_creature()
 
+@export var creature_id: String = "Creature"
+
 func _on_spawn_timer_timeout():
 	if creature_count < max_creatures:
 		_spawn_creature()
@@ -32,7 +34,9 @@ func _spawn_creature():
 	
 	var creature = creature_scene.instantiate()
 	# Set a unique name to avoid reserved name errors in MultiplayerSpawner
-	creature.name = "Rat_" + str(Time.get_ticks_msec()) + "_" + str(randi() % 1000)
+	var timestamp = str(Time.get_ticks_msec())
+	var rand_suffix = str(randi() % 1000)
+	creature.name = creature_id + "_" + timestamp + "_" + rand_suffix
 	creature.position = global_position
 	creature.tree_exited.connect(_on_creature_died)
 	

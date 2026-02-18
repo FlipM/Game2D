@@ -1,8 +1,11 @@
 extends "res://scripts/entities/Creature.gd"
 
+const DEFAULT_AGGRESSION = "Aggressive"
+const DEFAULT_MOVE_INTERVAL = 0.8
+
 func _ready():
-	aggression_type = "Aggressive"
-	move_interval = 0.8
+	aggression_type = DEFAULT_AGGRESSION
+	move_interval = DEFAULT_MOVE_INTERVAL
 	super._ready()
 	
 	if visuals:

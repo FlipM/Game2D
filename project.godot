@@ -11,6 +11,10 @@ config/icon="res://assets/player.png"
 
 driver="Dummy"
 
+[autoload]
+
+GameConstants="*res://scripts/core/GameConstants.gd"
+
 [display]
 
 window/size/viewport_width=1152

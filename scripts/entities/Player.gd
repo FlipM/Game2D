@@ -1,5 +1,7 @@
 extends CharacterBody2D
 
+const DEFAULT_SPAWN_POSITION = Vector2(576, 324)
+
 @onready var health = $HealthComponent
 @onready var movement = $MovementComponent
 @onready var combat = $CombatComponent
@@ -115,7 +117,7 @@ func die():
 	print("Player died!")
 	# Respawn logic
 	var world = get_parent().get_parent()
-	var spawn_pos = world.center_pos if "center_pos" in world else Vector2(576, 324)
+	var spawn_pos = world.center_pos if "center_pos" in world else DEFAULT_SPAWN_POSITION
 	movement.teleport(spawn_pos)
 	health.heal(health.max_health)
 

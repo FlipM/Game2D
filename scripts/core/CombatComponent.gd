@@ -42,4 +42,4 @@ func perform_attack(target: Node):
 
 func is_in_range(attacker: Node, target: Node) -> bool:
 	var dist = attacker.global_position.distance_to(target.global_position)
-	return dist <= 32 * melee_range_multiplier
+	return dist <= GameConstants.TILE_SIZE * melee_range_multiplier
