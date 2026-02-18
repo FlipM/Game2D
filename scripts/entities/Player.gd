@@ -5,29 +5,38 @@ extends CharacterBody2D
 @onready var combat = $CombatComponent
 @onready var visuals = $VisualsComponent
 
-@export var stats: Resource
+@export var unit_name: String = "Player"
+@export var max_hp: int = 100
+@export var attack: int = 10
+@export var defense: int = 10
+@export var speed: float = 200.0
+@export var attack_interval: float = 1.5
+@export var regen_hp: float = 1.0
+@export var regen_interval: float = 2.0
+
+var regen_timer: float = 0.0
 
 # Combat state
 @export var target_enemy_path: NodePath = ""
 @export var is_being_attacked: bool = false # Highlight if a monster is attacking
 
 func _ready():
-	if stats:
-		_apply_stats()
+	_apply_stats()
 	visuals.setup(health, combat)
 	health.died.connect(die)
 	
 	if is_multiplayer_authority():
 		combat.attacked.connect(_on_attacked)
 		health.damaged.connect(_on_damaged)
+		$Camera2D.enabled = true
 
 func _apply_stats():
-	health.max_health = stats.max_hp
-	health.current_health = stats.max_hp
-	movement.speed = stats.speed
-	combat.attack_power = stats.attack
-	combat.defense_power = stats.defense
-	combat.attack_interval = stats.attack_interval
+	health.max_health = max_hp
+	health.current_health = max_hp
+	movement.speed = speed
+	combat.attack_power = attack
+	combat.defense_power = defense
+	combat.attack_interval = attack_interval
 
 func _physics_process(delta):
 	if is_multiplayer_authority():
@@ -65,12 +74,13 @@ func _handle_combat_logic():
 		target_enemy_path = ""
 
 func _handle_regen(delta):
-	if not multiplayer.is_server() or stats.regen_hp <= 0:
+	if not multiplayer.is_server() or regen_hp <= 0:
 		return
 	
-	# Simple regen logic (could be moved to a RegenComponent)
-	# For now keeping it simple
-	health.heal(int(stats.regen_hp * delta))
+	regen_timer += delta
+	if regen_timer >= regen_interval:
+		regen_timer = 0.0
+		health.heal(int(regen_hp))
 
 func set_target(enemy):
 	if enemy:
@@ -101,9 +111,8 @@ func add_to_log(text: String):
 
 func _on_attacked(target, damage):
 	var target_name = "Creature"
-	var target_stats = target.get("stats")
-	if target_stats and "unit_name" in target_stats:
-		target_name = target_stats.unit_name
+	if "unit_name" in target:
+		target_name = target.unit_name
 	add_to_log.rpc("You hit %s for %d damage" % [target_name, damage])
 
 func _on_damaged(amount):

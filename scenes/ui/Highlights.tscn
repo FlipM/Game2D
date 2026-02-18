@@ -1,0 +1,25 @@
+[gd_scene format=3 uid="uid://highlights_scene"]
+
+[node name="Highlights" type="Node2D"]
+
+[node name="TargetHighlight" type="ReferenceRect" parent="."]
+visible = false
+offset_left = -16.0
+offset_top = -16.0
+offset_right = 16.0
+offset_bottom = 16.0
+border_color = Color(1, 0, 0, 1)
+border_width = 2.0
+editor_only = false
+z_index = 11
+
+[node name="AttackerHighlight" type="ReferenceRect" parent="."]
+visible = false
+offset_left = -18.0
+offset_top = -18.0
+offset_right = 18.0
+offset_bottom = 18.0
+border_color = Color(1, 1, 0, 1)
+border_width = 2.0
+editor_only = false
+z_index = 11

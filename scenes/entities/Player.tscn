@@ -3,12 +3,12 @@
 [ext_resource type="Script" path="res://scripts/entities/Player.gd" id="1_scripts_Player"]
 [ext_resource type="Texture2D" path="res://assets/player.png" id="2_texture_Icon"]
 [ext_resource type="PackedScene" uid="uid://hpbar_scene" path="res://scenes/ui/HPBar.tscn" id="3_hpbar"]
-[ext_resource type="Resource" uid="uid://player_stats" path="res://assets/resources/PlayerStats.tres" id="4_stats"]
 [ext_resource type="Script" path="res://scripts/core/HealthComponent.gd" id="5"]
 [ext_resource type="Script" path="res://scripts/core/MovementComponent.gd" id="6"]
 [ext_resource type="Script" path="res://scripts/core/CombatComponent.gd" id="7"]
 [ext_resource type="Script" path="res://scripts/core/VisualsComponent.gd" id="8"]
 [ext_resource type="PackedScene" uid="uid://damage_number" path="res://scenes/ui/DamageNumber.tscn" id="9"]
+[ext_resource type="PackedScene" uid="uid://highlights_scene" path="res://scenes/ui/Highlights.tscn" id="10"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
 properties/0/path = NodePath("MovementComponent:target_position")
@@ -32,7 +32,14 @@ size = Vector2(28, 28)
 
 [node name="Player" type="CharacterBody2D" groups=["players"]]
 script = ExtResource("1_scripts_Player")
-stats = ExtResource("4_stats")
+unit_name = "Player"
+max_hp = 100
+attack = 10
+defense = 10
+speed = 200.0
+attack_interval = 1.5
+regen_hp = 1.0
+regen_interval = 2.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectangleShape2D_player")
@@ -44,27 +51,7 @@ vframes = 7
 frame = 0
 z_index = 10
 
-[node name="TargetHighlight" type="ReferenceRect" parent="."]
-visible = false
-offset_left = -16.0
-offset_top = -16.0
-offset_right = 16.0
-offset_bottom = 16.0
-border_color = Color(1, 0, 0, 1)
-border_width = 2.0
-editor_only = false
-z_index = 11
-
-[node name="AttackerHighlight" type="ReferenceRect" parent="."]
-visible = false
-offset_left = -18.0
-offset_top = -18.0
-offset_right = 18.0
-offset_bottom = 18.0
-border_color = Color(1, 1, 0, 1)
-border_width = 2.0
-editor_only = false
-z_index = 11
+[node name="Highlights" parent="." instance=ExtResource("10")]
 
 [node name="HPBar" parent="." instance=ExtResource("3_hpbar")]
 offset_left = -16.0
@@ -86,9 +73,12 @@ script = ExtResource("7")
 script = ExtResource("8")
 sprite = NodePath("../Sprite2D")
 hp_bar = NodePath("../HPBar")
-target_highlight = NodePath("../TargetHighlight")
-attacker_highlight = NodePath("../AttackerHighlight")
+target_highlight = NodePath("../Highlights/TargetHighlight")
+attacker_highlight = NodePath("../Highlights/AttackerHighlight")
 damage_number_scene = ExtResource("9")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SceneReplicationConfig_1")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+enabled = false

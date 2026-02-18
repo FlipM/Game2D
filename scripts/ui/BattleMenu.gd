@@ -50,11 +50,10 @@ func _update_creature_list():
 		if not is_instance_valid(creature):
 			continue
 			
-		var stats_ref = creature.get("stats")
 		var health_ref = creature.get("health")
 		var visuals_ref = creature.get("visuals")
 		
-		var c_name = stats_ref.unit_name if stats_ref else "Creature"
+		var c_name = creature.get("unit_name") if creature.get("unit_name") != null else "Creature"
 		var c_hp = health_ref.current_health if health_ref else 0
 		var c_max = health_ref.max_health if health_ref else 1
 		

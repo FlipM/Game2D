@@ -7,7 +7,12 @@ class_name Creature
 @onready var combat = $CombatComponent
 @onready var visuals = $VisualsComponent
 
-@export var stats: Resource
+@export var unit_name: String = "Creature"
+@export var max_hp: int = 10
+@export var attack: int = 1
+@export var defense: int = 0
+@export var speed: float = 100.0
+@export var attack_interval: float = 1.5
 @export_enum("Neutral", "Aggressive", "Passive") var aggression_type: String = "Neutral"
 @export var is_attacking_player: bool = false
 
@@ -15,18 +20,17 @@ var move_timer = 0.0
 var move_interval = 1.0
 
 func _ready():
-	if stats:
-		_apply_stats()
+	_apply_stats()
 	visuals.setup(health, combat)
 	health.died.connect(die)
 
 func _apply_stats():
-	health.max_health = stats.max_hp
-	health.current_health = stats.max_hp
-	movement.speed = stats.speed
-	combat.attack_power = stats.attack
-	combat.defense_power = stats.defense
-	combat.attack_interval = stats.attack_interval
+	health.max_health = max_hp
+	health.current_health = max_hp
+	movement.speed = speed
+	combat.attack_power = attack
+	combat.defense_power = defense
+	combat.attack_interval = attack_interval
 
 func _physics_process(delta):
 	if multiplayer.is_server():
