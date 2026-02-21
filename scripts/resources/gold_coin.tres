@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ItemData.gd" id="1_itemdata"]
+
+[resource]
+script = ExtResource("1_itemdata")
+id = "gold_coin"
+name = "Gold Coin"
+weight = 0.01
+icon = null
+icon_path = "res://assets/gold_coin.png"
+is_collectable = true
+is_stackable = true
+max_stack = 99
+is_consumable = false
+is_usable = false
+is_container = false
+container_slots = 0

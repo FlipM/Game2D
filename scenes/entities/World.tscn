@@ -1,27 +1,36 @@
-[gd_scene load_steps=2 format=3 uid="uid://dj8xk8s3k2w1v"]
+[gd_scene format=3 uid="uid://dj8xk8s3k2w1v"]
 
-[ext_resource type="Script" path="res://scripts/core/World.gd" id="1_scripts_World"]
-[ext_resource type="PackedScene" uid="uid://battlemenu_scene" path="res://scenes/ui/BattleMenu.tscn" id="2_battle_menu"]
-[ext_resource type="PackedScene" uid="uid://playerhud_scene" path="res://scenes/ui/PlayerHUD.tscn" id="3_player_hud"]
+[ext_resource type="Script" uid="uid://dgukt280k5a4o" path="res://scripts/core/World.gd" id="1_scripts_World"]
+[ext_resource type="PackedScene" path="res://scenes/ui/BattleMenu.tscn" id="2_battle_menu"]
+[ext_resource type="PackedScene" path="res://scenes/ui/PlayerHUD.tscn" id="3_player_hud"]
 
-[node name="World" type="Node2D"]
-y_sort_enabled = true
+[node name="World" type="Node2D" unique_id=1646880186]
 script = ExtResource("1_scripts_World")
 
-[node name="Players" type="Node2D" parent="."]
+[node name="Items" type="Node2D" parent="." unique_id=204837561]
 y_sort_enabled = true
+z_index = 1
 
-[node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="."]
-_spawnable_scenes = PackedStringArray("res://scenes/entities/Player.tscn")
+[node name="ItemSpawner" type="MultiplayerSpawner" parent="." unique_id=204837562]
+_spawnable_scenes = PackedStringArray("res://scenes/entities/ItemEntity.tscn")
+spawn_path = NodePath("../Items")
+
+[node name="Players" type="Node2D" parent="." unique_id=1838141626]
+y_sort_enabled = true
+z_index = 2
+
+[node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="." unique_id=799568112]
+_spawnable_scenes = PackedStringArray("uid://c7t6j8i2b2e3y")
 spawn_path = NodePath("../Players")
 
-[node name="Creatures" type="Node2D" parent="."]
+[node name="Creatures" type="Node2D" parent="." unique_id=1125369474]
 y_sort_enabled = true
+z_index = 2
 
-[node name="CreatureSpawner" type="MultiplayerSpawner" parent="."]
+[node name="CreatureSpawner" type="MultiplayerSpawner" parent="." unique_id=128034821]
 _spawnable_scenes = PackedStringArray("res://scenes/entities/Rat.tscn")
 spawn_path = NodePath("../Creatures")
 
-[node name="BattleMenu" parent="." instance=ExtResource("2_battle_menu")]
+[node name="BattleMenu" parent="." unique_id=335890066 instance=ExtResource("2_battle_menu")]
 
-[node name="PlayerHUD" parent="." instance=ExtResource("3_player_hud")]
+[node name="PlayerHUD" parent="." unique_id=1122880070 instance=ExtResource("3_player_hud")]

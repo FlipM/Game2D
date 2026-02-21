@@ -7,156 +7,189 @@ signal movement_finished
 signal direction_changed(direction: Vector2)
 
 @export var speed: float = 100.0
-var tile_size: int = GameConstants.TILE_SIZE
 
 var target_position: Vector2 = Vector2.ZERO
-var is_moving: bool = false
+var is_moving: bool          = false
 var parent_body: CharacterBody2D
-var stuck_timer: float = 0.0
+var stuck_timer: float       = 0.0
 
 var current_path: PackedVector2Array = []
+var _destination: Vector2            = Vector2.ZERO
 
-func _exit_tree():
-	pass # Occupation is now group-based and synchronized
+var _world                        = null
+var _circle_shape: CircleShape2D  = null
 
+# ---------------------------------------------------------------------------
+# Lifecycle
+# ---------------------------------------------------------------------------
 func _ready():
 	parent_body = get_parent() as CharacterBody2D
 	if not parent_body:
 		push_error("MovementComponent must be a child of a CharacterBody2D")
+		return
+
 	target_position = parent_body.global_position
-	
-	# Programmatically change and shrink collision shape to allow squeezing
+	_world          = get_tree().get_first_node_in_group("world")
+
+	# Single shared shape for both the occupancy probe and the collision shape.
+	_circle_shape        = CircleShape2D.new()
+	_circle_shape.radius = GameConstants.TILE_SIZE / 3.2  # ≈ 10 px for a 32-px tile
+
 	var collision = parent_body.get_node_or_null("CollisionShape2D")
 	if collision:
-		var circle = CircleShape2D.new()
-		circle.radius = 10.0
-		collision.shape = circle
+		collision.shape = _circle_shape
 
-func _physics_process(_delta):
-	if Engine.is_editor_hint(): return
-	if not parent_body: return
-	
-	if parent_body.global_position.distance_to(target_position) > 2:
-		var prev_pos = parent_body.global_position
-		var diff = target_position - parent_body.global_position
-		var dir = diff.normalized()
-		
-		var effective_speed = speed
-		if abs(dir.x) > 0.1 and abs(dir.y) > 0.1:
-			effective_speed = speed * 0.7
-		
-		parent_body.velocity = dir * effective_speed
-		parent_body.move_and_slide()
-		
-		if not is_moving:
-			is_moving = true
-			movement_started.emit()
-			stuck_timer = 0.0
-		
-		# Stuck detection
-		if parent_body.global_position.distance_to(prev_pos) < 0.1:
-			stuck_timer += _delta
-			if stuck_timer > 0.8: # Balanced patience
-				if current_path.size() > 0:
-					current_path = []
-				# Re-snap to nearest grid point robustly
-				var world = get_tree().get_first_node_in_group("world")
-				if world:
-					var coords = world.get_tile_coords_robust(parent_body.global_position)
-					target_position = world.center_pos + Vector2(coords) * world.TILE_SIZE
-				_finish_movement()
-		else:
-			stuck_timer = 0.0
+# ---------------------------------------------------------------------------
+# Physics update — split into two focused helpers
+# ---------------------------------------------------------------------------
+func _physics_process(delta):
+	if Engine.is_editor_hint() or not parent_body:
+		return
+
+	if parent_body.global_position.distance_to(target_position) > GameConstants.ARRIVAL_THRESHOLD:
+		_tick_movement(delta)
 	else:
-		parent_body.velocity = Vector2.ZERO
-		parent_body.global_position = target_position
-		
-		if current_path.size() > 0:
-			var next_pos = current_path[0]
-			var world = get_tree().get_first_node_in_group("world")
-			if world and world.is_tile_occupied(next_pos, parent_body):
-				current_path = []
-				_finish_movement()
-			else:
-				target_position = next_pos
-				direction_changed.emit((target_position - parent_body.global_position).normalized())
-				current_path.remove_at(0)
-		elif is_moving:
+		_snap_and_advance_path()
+
+func _tick_movement(delta: float):
+	var prev_pos = parent_body.global_position
+	var dir      = (target_position - parent_body.global_position).normalized()
+
+	var effective_speed = speed
+	if abs(dir.x) > GameConstants.DIAGONAL_AXIS_THRESHOLD \
+	and abs(dir.y) > GameConstants.DIAGONAL_AXIS_THRESHOLD:
+		effective_speed *= GameConstants.DIAGONAL_SPEED_FACTOR
+
+	parent_body.velocity = dir * effective_speed
+	parent_body.move_and_slide()
+
+	if not is_moving:
+		is_moving = true
+		movement_started.emit()
+		stuck_timer = 0.0
+
+	if parent_body.global_position.distance_to(prev_pos) < GameConstants.STUCK_MIN_DISPLACEMENT:
+		stuck_timer += delta
+		if stuck_timer >= GameConstants.STUCK_TIMEOUT:
+			_abort_stuck()
+	else:
+		stuck_timer = 0.0
+
+func _abort_stuck():
+	current_path = []
+	_destination = Vector2.ZERO
+	# Snap to nearest tile so subsequent moves start from a clean position.
+	var coords    = GridService.world_to_tile(parent_body.global_position)
+	target_position = GridService.tile_to_world(coords)
+	_finish_movement()
+
+func _snap_and_advance_path():
+	parent_body.velocity        = Vector2.ZERO
+	parent_body.global_position = target_position
+
+	if current_path.size() == 0:
+		if is_moving:
 			_finish_movement()
+		return
+
+	var next_pos = current_path[0]
+	if GridService.is_tile_occupied(next_pos, parent_body):
+		_try_reroute_or_stop()
+	else:
+		_step_to(next_pos)
+
+func _try_reroute_or_stop():
+	if _world and _destination != Vector2.ZERO:
+		var new_path = _world.get_astar_path(parent_body.global_position, _destination, parent_body)
+		if new_path.size() > 0:
+			# Skip first waypoint if we are already on top of it.
+			if parent_body.global_position.distance_to(new_path[0]) < GameConstants.ARRIVAL_THRESHOLD:
+				new_path.remove_at(0)
+			current_path = new_path
+			if current_path.size() > 0 \
+			and not GridService.is_tile_occupied(current_path[0], parent_body):
+				_step_to(current_path[0])
+				return
+
+	# Reroute failed or no destination — give up.
+	current_path = []
+	_destination = Vector2.ZERO
+	_finish_movement()
+
+func _step_to(pos: Vector2):
+	target_position = pos
+	direction_changed.emit((target_position - parent_body.global_position).normalized())
+	current_path.remove_at(0)
 
 func _finish_movement():
-	is_moving = false
-	movement_finished.emit()
+	is_moving   = false
 	stuck_timer = 0.0
+	movement_finished.emit()
 
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 func try_move(direction: Vector2) -> bool:
-	if is_moving: return false
-	
-	var world = get_tree().get_first_node_in_group("world")
-	if not world: return false
-	
-	# Robust target calculation
-	var current_coords = world.get_tile_coords_robust(parent_body.global_position)
-	var target_coords = current_coords + Vector2i(round(direction.x), round(direction.y))
-	var new_target = world.center_pos + Vector2(target_coords) * world.TILE_SIZE
-	
-	# Check if target tile is occupied by other entities (now includes their target_position reservations)
-	if world.is_tile_occupied(new_target, parent_body):
+	if is_moving or not _world:
 		return false
-	
-	# Static collision check (walls)
-	var space_state = parent_body.get_world_2d().direct_space_state
-	var shape = CircleShape2D.new()
-	shape.radius = 10.0
-	
-	var query = PhysicsShapeQueryParameters2D.new()
-	query.shape = shape
-	query.transform = Transform2D(0, new_target)
-	query.collision_mask = parent_body.collision_mask
-	query.exclude = [parent_body.get_rid()]
-	
-	var results = space_state.intersect_shape(query)
-	for res in results:
-		if res.collider is StaticBody2D:
-			return false
-	
-	# Reserve the target immediately
+
+	var current_coords = GridService.world_to_tile(parent_body.global_position)
+	var target_coords  = current_coords + Vector2i(roundi(direction.x), roundi(direction.y))
+	var new_target     = GridService.tile_to_world(target_coords)
+
+	if GridService.is_tile_occupied(new_target, parent_body):
+		return false
+	if _is_wall(new_target):
+		return false
+
 	target_position = new_target
 	direction_changed.emit(direction)
-	is_moving = true
-	movement_started.emit()
+	is_moving   = true
 	stuck_timer = 0.0
+	movement_started.emit()
 	return true
 
+func _is_wall(world_pos: Vector2) -> bool:
+	var space_state = parent_body.get_world_2d().direct_space_state
+	var query       = PhysicsShapeQueryParameters2D.new()
+	query.shape          = _circle_shape
+	query.transform      = Transform2D(0, world_pos)
+	query.collision_mask = parent_body.collision_mask
+	query.exclude        = [parent_body.get_rid()]
+	for result in space_state.intersect_shape(query):
+		if result.collider is StaticBody2D:
+			return true
+	return false
+
 func move_to(path: PackedVector2Array):
-	if path.size() == 0: return
-	
+	if path.size() == 0:
+		return
+
 	current_path = path
-	if current_path.size() > 0 and parent_body.global_position.distance_to(current_path[0]) < 2:
+	_destination = current_path[current_path.size() - 1]
+
+	# Skip the first waypoint if we are already standing on it.
+	if parent_body.global_position.distance_to(current_path[0]) < GameConstants.ARRIVAL_THRESHOLD:
 		current_path.remove_at(0)
-	
-	if current_path.size() > 0:
-		var next_pos = current_path[0]
-		var world = get_tree().get_first_node_in_group("world")
-		if world and not world.is_tile_occupied(next_pos, parent_body):
-			target_position = next_pos
-			direction_changed.emit((target_position - parent_body.global_position).normalized())
-			current_path.remove_at(0)
-			is_moving = true
-			movement_started.emit()
-			stuck_timer = 0.0
-		else:
-			current_path = []
+
+	if current_path.size() == 0:
+		return
+
+	var next_pos = current_path[0]
+	if GridService.is_tile_occupied(next_pos, parent_body):
+		current_path = []
+		_destination = Vector2.ZERO
+		return
+
+	_step_to(next_pos)
+	is_moving   = true
+	stuck_timer = 0.0
+	movement_started.emit()
 
 func teleport(new_pos: Vector2):
-	target_position = new_pos
+	target_position             = new_pos
 	parent_body.global_position = new_pos
-	is_moving = false
-	stuck_timer = 0.0
-	current_path = []
-
-func _force_snap_to_grid():
-	var world = get_tree().get_first_node_in_group("world")
-	if world:
-		var coords = world.get_tile_coords_robust(parent_body.global_position)
-		teleport(world.center_pos + Vector2(coords) * world.TILE_SIZE)
+	is_moving                   = false
+	stuck_timer                 = 0.0
+	current_path                = []
+	_destination                = Vector2.ZERO

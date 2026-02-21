@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ItemData.gd" id="1_itemdata"]
+
+[resource]
+script = ExtResource("1_itemdata")
+id = "sword"
+name = "Sword"
+weight = 1.5
+icon = null
+icon_path = "res://assets/sword_normal.png"
+is_collectable = true
+is_stackable = false
+max_stack = 1
+is_consumable = false
+is_usable = true
+is_container = false
+container_slots = 0

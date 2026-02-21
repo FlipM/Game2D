@@ -1,6 +1,7 @@
 extends Node2D
 
 @export var creature_scene: PackedScene
+@export var creature_id: String = "Creature"
 @export var spawn_interval: float = 10.0
 @export var max_creatures: int = 5
 
@@ -21,8 +22,6 @@ func _ready():
 	# Spawn one immediately
 	_spawn_creature()
 
-@export var creature_id: String = "Creature"
-
 func _on_spawn_timer_timeout():
 	if creature_count < max_creatures:
 		_spawn_creature()
@@ -34,9 +33,7 @@ func _spawn_creature():
 	
 	var creature = creature_scene.instantiate()
 	# Set a unique name to avoid reserved name errors in MultiplayerSpawner
-	var timestamp = str(Time.get_ticks_msec())
-	var rand_suffix = str(randi() % 1000)
-	creature.name = creature_id + "_" + timestamp + "_" + rand_suffix
+	creature.name = creature_id + "_" + str(randi())
 	creature.position = global_position
 	creature.tree_exited.connect(_on_creature_died)
 	

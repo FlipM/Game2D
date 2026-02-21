@@ -1,217 +1,237 @@
 extends Node2D
 
-const PLAYER_SCENE = preload("res://scenes/entities/Player.tscn")
-const WALL_SCENE = preload("res://scenes/entities/Wall.tscn")
-const FLOOR_SCENE = preload("res://scenes/entities/Floor.tscn")
-const SPAWNER_SCENE = preload("res://scenes/entities/Spawner.tscn")
-const RAT_SCENE = preload("res://scenes/entities/Rat.tscn")
+const PLAYER_SCENE     = preload("res://scenes/entities/Player.tscn")
+const WALL_SCENE       = preload("res://scenes/entities/Wall.tscn")
+const FLOOR_SCENE      = preload("res://scenes/entities/Floor.tscn")
+const SPAWNER_SCENE    = preload("res://scenes/entities/Spawner.tscn")
+const RAT_SCENE        = preload("res://scenes/entities/Rat.tscn")
+const ITEM_ENTITY_SCENE = preload("res://scenes/entities/ItemEntity.tscn")
 
-@onready var TILE_SIZE = GameConstants.TILE_SIZE
-var ARENA_RADIUS = 5
-var BOUNDARY_RADIUS = 6
-const DIAGONAL_THRESHOLD_OFFSET = 1.0
+const ItemMoveController_Script = preload("res://scripts/core/ItemMoveController.gd")
+const FloorGrid_Script          = preload("res://scripts/core/FloorGrid.gd")
+const ItemInstance_Script       = preload("res://scripts/resources/ItemInstance.gd")
 
-@onready var center_pos = GameConstants.WORLD_CENTER
+var floor_grid: Node           = null
+var _item_move_controller: Node = null
 
-class GridAStar extends AStar2D:
-	func _compute_cost(from_id, to_id):
-		var from_pos = get_point_position(from_id)
-		var to_pos = get_point_position(to_id)
-		var dist = from_pos.distance_to(to_pos)
-		if dist > GameConstants.TILE_SIZE + 1.0: # Diagonal (approx 45.25)
-			return 2.1 # Higher than 2.0 to prioritize straight lines
-		return 1.0
+# ---------------------------------------------------------------------------
+# Pathfinding
+# ---------------------------------------------------------------------------
+# AStarGrid2D subclass with diagonal cost slightly above 2.
+# Two orthogonal steps (cost 2.0) always beat one diagonal on an open path, so
+# diagonals are only chosen when they avoid a detour that would cost more than 2.
+class DiagonalCostGrid extends AStarGrid2D:
+	func _compute_cost(from_id: Vector2i, to_id: Vector2i) -> float:
+		var d = (to_id - from_id).abs()
+		return GameConstants.ASTAR_DIAGONAL_COST if d.x == 1 and d.y == 1 \
+		                                         else GameConstants.ASTAR_ORTHOGONAL_COST
 
-	func _estimate_cost(from_id, to_id):
-		var from_pos = get_point_position(from_id)
-		var to_pos = get_point_position(to_id)
-		return from_pos.distance_to(to_pos) / float(GameConstants.TILE_SIZE)
+var astar := DiagonalCostGrid.new()
 
-var astar = GridAStar.new()
-var world_to_id = {}
-
-# Robust Mapping: Using round() ensures we get the nearest tile even with floating point drifts
-func get_tile_coords(pos: Vector2) -> Vector2i:
-	return Vector2i((pos - center_pos) / TILE_SIZE).snapped(Vector2i.ONE)
-	# Note: .snapped on Vector2i is not available in all versions, 
-	# let's use a more manual robust approach:
-	# var offset = pos - center_pos
-	# return Vector2i(round(offset.x / TILE_SIZE), round(offset.y / TILE_SIZE))
-
-func get_tile_coords_robust(pos: Vector2) -> Vector2i:
-	var offset = pos - center_pos
-	return Vector2i(round(offset.x / TILE_SIZE), round(offset.y / TILE_SIZE))
-
+# ---------------------------------------------------------------------------
+# Lifecycle
+# ---------------------------------------------------------------------------
 func _ready():
 	add_to_group("world")
 	_generate_arena()
+
+	floor_grid = FloorGrid_Script.new()
+	add_child(floor_grid)
+
+	_item_move_controller = ItemMoveController_Script.new()
+	_item_move_controller.floor_grid = floor_grid
+	add_child(_item_move_controller)
+
 	_setup_spawners()
 	_setup_astar()
-	
-	# Setup custom spawn function
+
 	$MultiplayerSpawner.spawn_function = _spawn_player
-	
-	# Only the server should spawn players
+	$ItemSpawner.spawn_function        = _spawn_item_entity
+	_item_move_controller.item_spawner = $ItemSpawner
+
 	if not multiplayer.is_server():
 		return
-	
+
 	multiplayer.peer_connected.connect(add_player)
 	multiplayer.peer_disconnected.connect(remove_player)
-	
-	# Add existing players
-	if multiplayer.is_server():
-		for id in multiplayer.get_peers():
-			add_player(id)
-		add_player(1)
 
-func _setup_astar():
-	astar.clear()
-	world_to_id.clear()
-	
-	# Iterate boundary nodes
-	for x in range(-BOUNDARY_RADIUS, BOUNDARY_RADIUS + 1):
-		for y in range(-BOUNDARY_RADIUS, BOUNDARY_RADIUS + 1):
-			var pos = center_pos + Vector2(x * TILE_SIZE, y * TILE_SIZE)
-			var id = astar.get_available_point_id()
-			
-			# Check if there's a wall here
-			var is_wall = false
-			if abs(x) > ARENA_RADIUS or abs(y) > ARENA_RADIUS:
-				is_wall = true
-			
-			if not is_wall:
-				astar.add_point(id, pos)
-				world_to_id[Vector2i(x, y)] = id
-	
-	# Connect points within inner arena
-	for x in range(-ARENA_RADIUS, ARENA_RADIUS + 1):
-		for y in range(-ARENA_RADIUS, ARENA_RADIUS + 1):
-			var current_id = world_to_id.get(Vector2i(x, y), -1)
-			if current_id == -1: continue
-			
-			# Neighbors (including diagonals)
-			for dx in range(-1, 2):
-				for dy in range(-1, 2):
-					if dx == 0 and dy == 0: continue
-					
-					var neighbor_pos = Vector2i(x + dx, y + dy)
-					var neighbor_id = world_to_id.get(neighbor_pos, -1)
-					
-					if neighbor_id != -1:
-						astar.connect_points(current_id, neighbor_id, true)
+	for id in multiplayer.get_peers():
+		add_player(id)
+	add_player(GameConstants.PEER_ID_SERVER)
 
-func get_astar_path(from_pos: Vector2, to_pos: Vector2, exclude_entity: Node = null) -> PackedVector2Array:
-	var start_id = astar.get_closest_point(from_pos)
-	var end_id = astar.get_closest_point(to_pos)
-	
-	if start_id == -1 or end_id == -1:
-		return PackedVector2Array()
-	
-	# Temporarily disable points occupied/reserved by others
-	var disabled_points = []
-	var entities = get_tree().get_nodes_in_group("players") + get_tree().get_nodes_in_group("creatures")
-	var target_coords = get_tile_coords_robust(to_pos)
-	
-	for entity in entities:
-		if not is_instance_valid(entity) or entity == exclude_entity:
-			continue
-		
-		# Check both current position and intended target (reservation)
-		var movement = entity.get_node_or_null("MovementComponent")
-		if not movement: continue
-		
-		var current_coords = get_tile_coords_robust(entity.global_position)
-		var reserved_coords = get_tile_coords_robust(movement.target_position)
-		
-		for coords in [current_coords, reserved_coords]:
-			if coords != target_coords:
-				var id = world_to_id.get(coords, -1)
-				if id != -1 and id != end_id and not astar.is_point_disabled(id):
-					astar.set_point_disabled(id, true)
-					disabled_points.append(id)
-	
-	var path = astar.get_point_path(start_id, end_id)
-	
-	# Re-enable points
-	for id in disabled_points:
-		astar.set_point_disabled(id, false)
-		
-	return path
+	_spawn_item_at_tile("res://scripts/resources/sword.tres",     Vector2i(1,  0))
+	_spawn_item_at_tile("res://scripts/resources/gold_coin.tres", Vector2i(-2, 1))
+	_spawn_item_at_tile("res://scripts/resources/gold_coin.tres", Vector2i(-1, 1))
+	_spawn_item_at_tile("res://scripts/resources/gold_coin.tres", Vector2i(0,  1))
 
-func is_tile_occupied(pos: Vector2, exclude_entity: Node = null) -> bool:
-	var check_coords = get_tile_coords_robust(pos)
-	var entities = get_tree().get_nodes_in_group("players") + get_tree().get_nodes_in_group("creatures")
-	
-	for entity in entities:
-		if not is_instance_valid(entity) or entity == exclude_entity:
-			continue
-		
-		var movement = entity.get_node_or_null("MovementComponent")
-		if not movement: continue
-		
-		# A tile is occupied if an entity is physically there OR has reserved it (target_position)
-		var entity_coords = get_tile_coords_robust(entity.global_position)
-		var reserved_coords = get_tile_coords_robust(movement.target_position)
-		
-		if entity_coords == check_coords or reserved_coords == check_coords:
-			return true
-	return false
+# ---------------------------------------------------------------------------
+# Arena generation
+# ---------------------------------------------------------------------------
+func _generate_arena():
+	var env_node    = Node2D.new()
+	env_node.name   = "Environment"
+	add_child(env_node)
 
-func _spawn_player(data):
-	var id = data[0]
+	var ts     = GameConstants.TILE_SIZE
+	var center = GameConstants.WORLD_CENTER
+	var arena  = GameConstants.ARENA_RADIUS
+	var bound  = GameConstants.BOUNDARY_RADIUS
+
+	for x in range(-bound, bound + 1):
+		for y in range(-bound, bound + 1):
+			var pos  = center + Vector2(x * ts, y * ts)
+			var tile = FLOOR_SCENE if (abs(x) <= arena and abs(y) <= arena) else WALL_SCENE
+			var node = tile.instantiate()
+			node.position = pos
+			env_node.add_child(node)
+
+# ---------------------------------------------------------------------------
+# Spawners
+# ---------------------------------------------------------------------------
+func _setup_spawners():
+	if not multiplayer.is_server():
+		return
+	var spawner             = SPAWNER_SCENE.instantiate()
+	spawner.creature_scene  = RAT_SCENE
+	spawner.spawn_interval  = 10.0
+	spawner.max_creatures   = 5
+	spawner.position = GameConstants.WORLD_CENTER \
+	                 + Vector2(-3 * GameConstants.TILE_SIZE, -3 * GameConstants.TILE_SIZE)
+	add_child(spawner)
+
+func add_player(id: int):
+	print("Adding player: ", id)
+	$MultiplayerSpawner.spawn([id, GameConstants.WORLD_CENTER])
+
+func remove_player(id: int):
+	print("Removing player: ", id)
+	var player = $Players.get_node_or_null(str(id))
+	if player:
+		player.queue_free()
+
+func _spawn_player(data: Array) -> Node:
+	var id  = data[0]
 	var pos = data[1]
-	print("Spawn function called for: ", id, " at ", pos)
-	
 	var player = PLAYER_SCENE.instantiate()
 	player.name = str(id)
 	player.set_multiplayer_authority(id)
 	player.position = pos
 	return player
 
-func _generate_arena():
-	# Create a container for environment if not exists
-	var env_node = Node2D.new()
-	env_node.name = "Environment"
-	add_child(env_node)
-	
-	# 10x10 Floor: x=[-5, 5], y=[-5, 5]
-	# Walls surround it: x=[-6, 6], y=[-6, 6] logic
-	
-	for x in range(-6, 7):
-		for y in range(-6, 7):
-			var pos = center_pos + Vector2(x * TILE_SIZE, y * TILE_SIZE)
-			
-			if abs(x) <= 5 and abs(y) <= 5:
-				# Floor
-				var floor_tile = FLOOR_SCENE.instantiate()
-				floor_tile.position = pos
-				env_node.add_child(floor_tile)
-			else:
-				# Wall
-				var wall = WALL_SCENE.instantiate()
-				wall.position = pos
-				env_node.add_child(wall)
+# ---------------------------------------------------------------------------
+# Item spawning
+# ---------------------------------------------------------------------------
+func _spawn_item_entity(data: Array) -> Node:
+	# Only set position here — item data is pushed separately via sync_to_clients
+	# RPC to avoid the Resource arriving as EncodedObjectAsID on clients.
+	var entity    = ITEM_ENTITY_SCENE.instantiate()
+	entity.position = data[1]
+	return entity
 
-func _setup_spawners():
-	# Only server creates spawners
+func _spawn_item_at_tile(item_data_path: String, tile_coords: Vector2i):
+	var item_data = load(item_data_path)
+	if not item_data:
+		push_error("World: Failed to load item data: " + item_data_path)
+		return
+	var inst  = ItemInstance_Script.new()
+	inst.data  = item_data
+	inst.count = 1
+	floor_grid.add_item(tile_coords, inst)
+
+	var pos    = GridService.tile_to_world(tile_coords)
+	var entity = $ItemSpawner.spawn([inst, pos])
+	# Set item AFTER spawn() returns — setting it inside spawn_function would
+	# include it in the spawn snapshot and cause EncodedObjectAsID on clients.
+	entity.set_item(inst)
+	entity.sync_to_clients.rpc(pos, item_data_path, inst.count)
+	print("Spawned item '%s' at tile %s" % [item_data.name, tile_coords])
+
+# ---------------------------------------------------------------------------
+# Item interaction RPC (server-authoritative)
+# ---------------------------------------------------------------------------
+@rpc("any_peer", "call_local")
+func request_move_item(entity_path: NodePath, drop_tile: Vector2i,
+                       requester_id: int, split_count: int = 0):
 	if not multiplayer.is_server():
 		return
-	
-	# Create a spawner in the top-left area of the arena
-	var spawner = SPAWNER_SCENE.instantiate()
-	spawner.creature_scene = RAT_SCENE
-	spawner.spawn_interval = 10.0
-	spawner.max_creatures = 5
-	spawner.position = center_pos + Vector2(-3 * TILE_SIZE, -3 * TILE_SIZE)
-	add_child(spawner)
 
-func add_player(id):
-	print("Adding player: ", id)
-	# Trigger spawn via MultiplayerSpawner
-	$MultiplayerSpawner.spawn([id, center_pos])
+	var entity = get_node_or_null(entity_path)
+	if not entity or not entity.has_method("set_item"):
+		push_warning("World.request_move_item: invalid entity path %s" % entity_path)
+		return
+	if entity.item == null:
+		return
 
-func remove_player(id):
-	print("Removing player: ", id)
-	var player = $Players.get_node_or_null(str(id))
-	if player:
-		player.queue_free()
+	# Proximity check — requester must be adjacent to the item.
+	var player_node = _find_player_by_id(requester_id)
+	if player_node == null:
+		return
+	var item_tile   = GridService.world_to_tile(entity.global_position)
+	var player_tile = GridService.world_to_tile(player_node.global_position)
+	var dist = (item_tile - player_tile).abs()
+	if dist.x > 1 or dist.y > 1:
+		push_warning("World.request_move_item: player too far from item")
+		return
+
+	if not astar.is_in_boundsv(drop_tile):
+		push_warning("World.request_move_item: drop tile %s is outside arena" % drop_tile)
+		return
+	if drop_tile == item_tile:
+		return
+
+	var moving = entity.item.count if split_count <= 0 \
+	                               else mini(split_count, entity.item.count)
+	_item_move_controller.execute(entity, item_tile, drop_tile, moving)
+
+func _find_player_by_id(peer_id: int) -> Node:
+	for p in get_tree().get_nodes_in_group("players"):
+		if is_instance_valid(p) and p.get_multiplayer_authority() == peer_id:
+			return p
+	return null
+
+# ---------------------------------------------------------------------------
+# Pathfinding
+# ---------------------------------------------------------------------------
+func _setup_astar():
+	var size = GameConstants.ARENA_RADIUS * 2 + 1
+	astar.region    = Rect2i(-GameConstants.ARENA_RADIUS, -GameConstants.ARENA_RADIUS, size, size)
+	astar.cell_size = Vector2(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE)
+	astar.offset    = GameConstants.WORLD_CENTER
+	# DIAGONAL_MODE_ALWAYS: the cost model decides when diagonals are worthwhile.
+	astar.diagonal_mode            = AStarGrid2D.DIAGONAL_MODE_ALWAYS
+	# Manhattan heuristic is admissible when diagonal cost > 2.
+	astar.default_estimate_heuristic = AStarGrid2D.HEURISTIC_MANHATTAN
+	astar.update()
+
+func get_astar_path(from_pos: Vector2, to_pos: Vector2,
+                    exclude_entity: Node = null) -> PackedVector2Array:
+	var from_cell = GridService.world_to_tile(from_pos)
+	var to_cell   = GridService.world_to_tile(to_pos)
+
+	# Temporarily mark occupied tiles solid so the path avoids them.
+	# Use a Dictionary as a set to avoid marking the same cell twice.
+	var blocked: Dictionary = {}
+	for group in ["players", "creatures"]:
+		for entity in get_tree().get_nodes_in_group(group):
+			if not is_instance_valid(entity) or entity == exclude_entity:
+				continue
+			var movement = entity.get_node_or_null("MovementComponent")
+			if not movement:
+				continue
+			for cell in [GridService.world_to_tile(entity.global_position),
+			             GridService.world_to_tile(movement.target_position)]:
+				if cell != to_cell and astar.is_in_boundsv(cell) and not blocked.has(cell):
+					astar.set_point_solid(cell, true)
+					blocked[cell] = true
+
+	var path = astar.get_point_path(from_cell, to_cell)
+
+	for cell in blocked:
+		astar.set_point_solid(cell, false)
+
+	return path
+
+# Mark a tile permanently solid or walkable (doors, placed objects, etc.).
+func set_tile_solid(tile: Vector2i, solid: bool) -> void:
+	if astar.is_in_boundsv(tile):
+		astar.set_point_solid(tile, solid)

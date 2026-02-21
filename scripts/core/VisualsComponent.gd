@@ -127,10 +127,11 @@ func _on_health_changed(current, maximum):
 			hp_bar.max_value = maximum
 			hp_bar.value = current
 
+@export var entity_color: Color = GameConstants.ENEMY_COLOR
+
 func _on_damaged(amount):
 	if amount > 0:
-		var color = GameConstants.PLAYER_COLOR if get_parent().is_in_group("players") else GameConstants.ENEMY_COLOR
-		spawn_damage_number(amount, color)
+		spawn_damage_number(amount, entity_color)
 
 func _on_target_changed(new_target):
 	if target_highlight:

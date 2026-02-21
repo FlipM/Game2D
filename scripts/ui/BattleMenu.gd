@@ -3,12 +3,14 @@ extends Panel
 var dragging = false
 var drag_offset = Vector2.ZERO
 
+# Cached reference to the local player — resolved once and reused.
+var _local_player = null
+
 @onready var creature_list = $MarginContainer/VBoxContainer/ScrollContainer/CreatureList
 @onready var title_bar = $TitleBar
 
 func _ready():
 	title_bar.gui_input.connect(_on_title_bar_input)
-	# Update creature list periodically
 	var timer = Timer.new()
 	timer.wait_time = 0.5
 	timer.timeout.connect(_update_creature_list)
@@ -23,7 +25,7 @@ func _on_title_bar_input(event):
 				drag_offset = get_global_mouse_position() - global_position
 			else:
 				dragging = false
-	
+
 	if event is InputEventMouseMotion and dragging:
 		var new_pos = get_global_mouse_position() - drag_offset
 		# Clamp to screen bounds
@@ -32,67 +34,68 @@ func _on_title_bar_input(event):
 		new_pos.y = clamp(new_pos.y, 0, screen_size.y - size.y)
 		global_position = new_pos
 
+func _get_local_player():
+	if is_instance_valid(_local_player):
+		return _local_player
+	_local_player = null
+	for p in get_tree().get_nodes_in_group("players"):
+		if p.is_multiplayer_authority():
+			_local_player = p
+			break
+	return _local_player
+
 func _update_creature_list():
 	# Clear existing buttons
 	for child in creature_list.get_children():
 		child.queue_free()
-	
-	# Get local player
-	var player = null
-	var players = get_tree().get_nodes_in_group("players")
-	for p in players:
-		if p.is_multiplayer_authority():
-			player = p
-			break
-	
+
+	var player = _get_local_player()
+
 	var creatures = get_tree().get_nodes_in_group("creatures")
 	for creature in creatures:
 		if not is_instance_valid(creature):
 			continue
-			
+
 		var health_ref = creature.get("health")
 		var visuals_ref = creature.get("visuals")
-		
+
 		var c_name = creature.get("unit_name") if creature.get("unit_name") != null else "Creature"
 		var c_hp = health_ref.current_health if health_ref else 0
 		var c_max = health_ref.max_health if health_ref else 1
-		
+
 		var button = Button.new()
 		button.text = "%s (HP: %d/%d)" % [c_name, c_hp, c_max]
-		
+
 		# Highlight if targeted
 		var player_target_path = player.get("target_enemy_path") if player else null
-		if (player and player_target_path is NodePath and not player_target_path.is_empty() 
+		if (player and player_target_path is NodePath and not player_target_path.is_empty()
 			and player.get_node_or_null(player_target_path) == creature):
 			button.modulate = Color.RED
 			if visuals_ref: visuals_ref.set("is_targeted", true)
 		else:
 			if visuals_ref: visuals_ref.set("is_targeted", false)
-			
+
 		button.pressed.connect(_on_creature_selected.bind(creature, button))
 		creature_list.add_child(button)
 
 func _on_creature_selected(creature, button):
-	var player = null
-	for p in get_tree().get_nodes_in_group("players"):
-		if p.is_multiplayer_authority():
-			player = p
-			break
-			
-	if player and player.has_method("set_target"):
-		var player_target_path = player.get("target_enemy_path")
-		var current_target = null
-		if player_target_path is NodePath and not player_target_path.is_empty():
-			current_target = player.get_node_or_null(player_target_path)
-			
-		if current_target == creature:
-			# Stop attacking
-			player.set_target(null)
-			button.modulate = Color.WHITE
-		else:
-			# Start attacking
-			player.set_target(creature)
-			# Reset all button colors
-			for btn in creature_list.get_children():
-				btn.modulate = Color.WHITE
-			button.modulate = Color.RED
+	var player = _get_local_player()
+	if not (player and player.has_method("set_target")):
+		return
+
+	var player_target_path = player.get("target_enemy_path")
+	var current_target = null
+	if player_target_path is NodePath and not player_target_path.is_empty():
+		current_target = player.get_node_or_null(player_target_path)
+
+	if current_target == creature:
+		# Stop attacking
+		player.set_target(null)
+		button.modulate = Color.WHITE
+	else:
+		# Start attacking
+		player.set_target(creature)
+		# Reset all button colors
+		for btn in creature_list.get_children():
+			btn.modulate = Color.WHITE
+		button.modulate = Color.RED
