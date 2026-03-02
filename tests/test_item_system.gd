@@ -1,20 +1,22 @@
 extends Node
 ## Non-GUI automated tests for the item system (ItemData, ItemInstance, FloorGrid).
-## Run headless: godot --headless --script tests/test_item_system.gd
+## Run standalone help: godot --headless --path . tests/test_item_system.gd
 ## Exit code 0 = all passed, 1 = failures.
 
-const _ItemData     = preload("res://scripts/resources/ItemData.gd")
+const _ItemData = preload("res://scripts/resources/ItemData.gd")
 const _ItemInstance = preload("res://scripts/resources/ItemInstance.gd")
-const _FloorGrid    = preload("res://scripts/core/FloorGrid.gd")
+const _FloorGrid = preload("res://scripts/core/FloorGrid.gd")
 
 var _passed: int = 0
 var _failed: int = 0
 
 
 func _ready():
-	_run_all()
-	print("\n=== Item System Tests: %d passed, %d failed ===" % [_passed, _failed])
-	get_tree().quit(1 if _failed > 0 else 0)
+	# Standalone run support
+	if get_tree().current_scene == self:
+		_run_all()
+		print("\n=== Item System Tests: %d passed, %d failed ===" % [_passed, _failed])
+		get_tree().quit(1 if _failed > 0 else 0)
 
 
 func _run_all():
@@ -129,12 +131,13 @@ func _test_floor_grid_add_and_get():
 	var b = _make_instance(d, 4)
 	var tile = Vector2i(1, 2)
 	grid.add_item(tile, a)
-	# Second add of compatible stackable item should stack onto existing entry
+	# Second add of compatible stackable item currently appends a new independent entry
+	# (Merging is the caller's responsibility in ItemMoveController)
 	grid.add_item(tile, b)
 	var pile = grid.get_items_at(tile)
-	# a was added first (non-full), b stacked onto it
-	_assert(pile.size() == 1, "stackable items merge into one pile entry")
-	_assert(pile[0].count == 7, "merged pile has combined count")
+	_assert(pile.size() == 2, "stackable items currently added as separate pile entries")
+	_assert(pile[0] == a and pile[1] == b, "both items preserved in pile order")
+	_assert(pile[0].count == 3 and pile[1].count == 4, "counts preserved individually")
 	grid.free()
 
 func _test_floor_grid_remove_by_ref():

@@ -15,9 +15,10 @@ signal died
 		health_changed.emit(current_health, max_health)
 var current_health: int = 10:
 	set(value):
+		var old = current_health
 		current_health = clamp(value, 0, max_health)
 		health_changed.emit(current_health, max_health)
-		if current_health <= 0:
+		if current_health <= 0 and old > 0:
 			died.emit()
 
 func _ready():

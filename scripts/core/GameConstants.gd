@@ -4,14 +4,14 @@ extends Node
 # ---------------------------------------------------------------------------
 # Grid and World Geometry
 # ---------------------------------------------------------------------------
-const TILE_SIZE: int        = 32
-const SCREEN_WIDTH: int     = 1152
-const SCREEN_HEIGHT: int    = 648
+const TILE_SIZE: int = 32
+const SCREEN_WIDTH: int = 1152
+const SCREEN_HEIGHT: int = 648
 const WORLD_CENTER: Vector2 = Vector2(576, 324)
 
 # Arena dimensions (in tiles from centre, inclusive).
 # BOUNDARY_RADIUS = ARENA_RADIUS + 1 (one ring of walls outside the floor).
-const ARENA_RADIUS: int    = 8
+const ARENA_RADIUS: int = 8
 const BOUNDARY_RADIUS: int = 9
 
 # ---------------------------------------------------------------------------
@@ -44,9 +44,9 @@ const MELEE_RANGE_MULTIPLIER: float = 1.6
 # ---------------------------------------------------------------------------
 # Default entity stats
 # ---------------------------------------------------------------------------
-const DEFAULT_MAX_HEALTH: int      = 10
-const DEFAULT_ATTACK_POWER: int    = 1
-const DEFAULT_DEFENSE_POWER: int   = 0
+const DEFAULT_MAX_HEALTH: int = 10
+const DEFAULT_ATTACK_POWER: int = 1
+const DEFAULT_DEFENSE_POWER: int = 0
 const DEFAULT_ATTACK_INTERVAL: float = 1.5
 
 # ---------------------------------------------------------------------------
@@ -58,6 +58,6 @@ const PEER_ID_SERVER: int = 1
 # Visuals
 # ---------------------------------------------------------------------------
 const PLAYER_COLOR: Color = Color.RED
-const ENEMY_COLOR: Color  = Color.WHITE
+const ENEMY_COLOR: Color = Color.WHITE
 const DAMAGE_NUMBER_CENTER_OFFSET: Vector2 = Vector2(-100, -32)
-const DAMAGE_NUMBER_SIZE: Vector2          = Vector2(200, 20)
+const DAMAGE_NUMBER_SIZE: Vector2 = Vector2(200, 20)
