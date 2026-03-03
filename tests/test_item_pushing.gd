@@ -90,9 +90,9 @@ func _test_try_merge_compatible():
 	var dst_e = _make_entity(dst_inst, dst_tile)
 	grid.add_item(src_tile, src_inst); grid.add_item(dst_tile, dst_inst)
 	GridService.register_item_entity(dst_e)
-	var merged = imc.try_merge(src_e, src_tile, dst_tile, 3)
+	var merged_qty = imc.try_merge(src_e, src_tile, dst_tile, 3)
 	GridService.unregister_item_entity(dst_e)
-	_assert(merged, "try_merge returns true for compatible stacks")
+	_assert(merged_qty == 3, "try_merge returns quantity merged for compatible stacks")
 	_assert(dst_inst.count == 7, "destination count increased by merged amount")
 	src_e.queue_free(); dst_e.queue_free(); grid.queue_free(); imc.queue_free()
 
@@ -106,9 +106,9 @@ func _test_try_merge_full_dest_rejected():
 	var src_e = _make_entity(src_inst, src_tile)
 	var dst_e = _make_entity(dst_inst, dst_tile)
 	GridService.register_item_entity(dst_e)
-	var merged = imc.try_merge(src_e, src_tile, dst_tile, 2)
+	var merged_qty = imc.try_merge(src_e, src_tile, dst_tile, 2)
 	GridService.unregister_item_entity(dst_e)
-	_assert(not merged, "try_merge rejected when destination is full")
+	_assert(merged_qty == 0, "try_merge returns 0 when destination is full")
 	src_e.queue_free(); dst_e.queue_free(); grid.queue_free(); imc.queue_free()
 
 func _test_try_merge_incompatible_rejected():
@@ -120,9 +120,9 @@ func _test_try_merge_incompatible_rejected():
 	var src_e = _make_entity(src_inst, src_tile)
 	var dst_e = _make_entity(dst_inst, dst_tile)
 	GridService.register_item_entity(dst_e)
-	var merged = imc.try_merge(src_e, src_tile, dst_tile, 1)
+	var merged_qty = imc.try_merge(src_e, src_tile, dst_tile, 1)
 	GridService.unregister_item_entity(dst_e)
-	_assert(not merged, "try_merge rejected for incompatible item types")
+	_assert(merged_qty == 0, "try_merge returns 0 for incompatible item types")
 	src_e.queue_free(); dst_e.queue_free(); grid.queue_free(); imc.queue_free()
 
 func _test_move_whole_updates_floor_grid():
@@ -168,3 +168,31 @@ func _test_execute_routes_to_move_whole():
 	GridService.unregister_item_entity(entity)
 	_assert(grid.has_items_at(dst_tile), "execute correctly routes to move_whole for count==1")
 	entity.queue_free(); grid.queue_free(); imc.queue_free()
+
+func _test_execute_partial_merge_creates_surplus_stack():
+	print("\n[execute_partial_merge_creates_surplus_stack]")
+	var s = _setup(); var grid = s[0]; var imc = s[1]
+	var d = _make_data("coin", true, 10)
+	var src_inst = _make_inst(d, 8)
+	var dst_inst = _make_inst(d, 5) # Has room for 5 more.
+	var src_tile = Vector2i(41, 0); var dst_tile = Vector2i(42, 0)
+	var src_e = _make_entity(src_inst, src_tile)
+	var dst_e = _make_entity(dst_inst, dst_tile)
+	grid.add_item(src_tile, src_inst); grid.add_item(dst_tile, dst_inst)
+	GridService.register_item_entity(src_e)
+	GridService.register_item_entity(dst_e)
+	
+	# Try to move all 8. 5 should merge, 3 should create a new stack.
+	imc.execute(src_e, src_tile, dst_tile, 8)
+	
+	GridService.unregister_item_entity(dst_e)
+	# src_e should be queue_freed or updated. In this case, it moved the remainder.
+	# Actually, since we moved the remainder, the original entity might have been moved or a new one spawned if it was a split.
+	# With 8 units, 5 merged, 3 remain. 3 < 8, so it calls split(3).
+	
+	_assert(dst_inst.count == 10, "destination stack is now full")
+	var items = grid.get_items_at(dst_tile)
+	_assert(items.size() == 2, "destination tile now has two stacks")
+	_assert(items[1].count == 3, "second stack has surplus amount")
+	
+	grid.queue_free(); imc.queue_free(); dst_e.queue_free()

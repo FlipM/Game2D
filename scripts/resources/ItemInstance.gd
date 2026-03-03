@@ -61,7 +61,7 @@ func can_add_to_container(item) -> bool:
             break
     # Capacity: unlimited containers always have room; slot-limited ones need a free slot.
     if data.container_slots > 0:
-        return _find_placement_slot(item) != -2  # -2 = truly no room
+        return _find_placement_slot(item) != -2 # -2 = truly no room
     return true
 
 # Place `item` into this container following the slot-placement rule:
@@ -78,18 +78,21 @@ func add_to_container(item) -> bool:
 
 # Internal: attempt to place `item` into this container. Returns true on success.
 func _place_item(item) -> bool:
-    var slots = data.container_slots  # 0 = unlimited
+    var slots = data.container_slots # 0 = unlimited
 
-    # First pass: try to stack onto a matching top-level slot entry.
+    # First pass: try to stack onto matching top-level slot entries.
+    # We continue as long as `item.count > 0` and there are possible merges.
     for i in contents.size():
         var slot = contents[i]
         if slot == null:
             continue
         if slot.can_stack_with(item) and not slot.is_full():
-            slot.add_to_stack(item.count)
-            return true
+            var added = slot.add_to_stack(item.count)
+            item.remove_from_stack(added)
+            if item.is_empty():
+                return true
 
-    # Second pass: find the first empty (null) slot or append if unlimited.
+    # Second pass: find empty (null) slots or append if unlimited.
     if slots == 0:
         # Unlimited — just append by reference.
         item.parent_container = self
@@ -99,17 +102,24 @@ func _place_item(item) -> bool:
         # Fixed slots — ensure the array is the right length.
         while contents.size() < slots:
             contents.append(null)
+        
+        # Try to place the (potentially reduced) item into the first empty slot.
         for i in contents.size():
             if contents[i] == null:
                 item.parent_container = self
                 contents[i] = item
                 return true
+        
         # No empty slot found — try recursing into any nested container slots.
+        # Note: Recursive addition might also only partially succeed if we were to support
+        # multi-container splitting, but for now we keep it simple: if it can fit the 
+        # REMAINDER in a sub-container, we do it.
         for i in contents.size():
             var slot = contents[i]
             if slot != null and slot.data and slot.data.is_container:
                 if slot.add_to_container(item):
                     return true
+        
         return false
 
 # Remove and return the item at `idx` from this container. Returns null on failure.
@@ -119,7 +129,7 @@ func remove_from_container(idx: int):
     if idx < 0 or idx >= contents.size():
         return null
     var removed = contents[idx]
-    contents[idx] = null  # leave the slot empty rather than collapsing the array
+    contents[idx] = null # leave the slot empty rather than collapsing the array
     if removed != null:
         removed.parent_container = null
     return removed

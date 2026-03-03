@@ -1,17 +1,17 @@
 extends Node2D
 
-const PLAYER_SCENE     = preload("res://scenes/entities/Player.tscn")
-const WALL_SCENE       = preload("res://scenes/entities/Wall.tscn")
-const FLOOR_SCENE      = preload("res://scenes/entities/Floor.tscn")
-const SPAWNER_SCENE    = preload("res://scenes/entities/Spawner.tscn")
-const RAT_SCENE        = preload("res://scenes/entities/Rat.tscn")
+const PLAYER_SCENE = preload("res://scenes/entities/Player.tscn")
+const WALL_SCENE = preload("res://scenes/entities/Wall.tscn")
+const FLOOR_SCENE = preload("res://scenes/entities/Floor.tscn")
+const SPAWNER_SCENE = preload("res://scenes/entities/Spawner.tscn")
+const RAT_SCENE = preload("res://scenes/entities/Rat.tscn")
 const ITEM_ENTITY_SCENE = preload("res://scenes/entities/ItemEntity.tscn")
 
 const ItemMoveController_Script = preload("res://scripts/core/ItemMoveController.gd")
-const FloorGrid_Script          = preload("res://scripts/core/FloorGrid.gd")
-const ItemInstance_Script       = preload("res://scripts/resources/ItemInstance.gd")
+const FloorGrid_Script = preload("res://scripts/core/FloorGrid.gd")
+const ItemInstance_Script = preload("res://scripts/resources/ItemInstance.gd")
 
-var floor_grid: Node           = null
+var floor_grid: Node = null
 var _item_move_controller: Node = null
 
 # ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ func _ready():
 	_setup_astar()
 
 	$MultiplayerSpawner.spawn_function = _spawn_player
-	$ItemSpawner.spawn_function        = _spawn_item_entity
+	$ItemSpawner.spawn_function = _spawn_item_entity
 	_item_move_controller.item_spawner = $ItemSpawner
 
 	if not multiplayer.is_server():
@@ -59,27 +59,27 @@ func _ready():
 		add_player(id)
 	add_player(GameConstants.PEER_ID_SERVER)
 
-	_spawn_item_at_tile("res://scripts/resources/sword.tres",     Vector2i(1,  0))
+	_spawn_item_at_tile("res://scripts/resources/sword.tres", Vector2i(1, 0))
 	_spawn_item_at_tile("res://scripts/resources/gold_coin.tres", Vector2i(-2, 1))
 	_spawn_item_at_tile("res://scripts/resources/gold_coin.tres", Vector2i(-1, 1))
-	_spawn_item_at_tile("res://scripts/resources/gold_coin.tres", Vector2i(0,  1))
+	_spawn_item_at_tile("res://scripts/resources/gold_coin.tres", Vector2i(0, 1))
 
 # ---------------------------------------------------------------------------
 # Arena generation
 # ---------------------------------------------------------------------------
 func _generate_arena():
-	var env_node    = Node2D.new()
-	env_node.name   = "Environment"
+	var env_node = Node2D.new()
+	env_node.name = "Environment"
 	add_child(env_node)
 
-	var ts     = GameConstants.TILE_SIZE
+	var ts = GameConstants.TILE_SIZE
 	var center = GameConstants.WORLD_CENTER
-	var arena  = GameConstants.ARENA_RADIUS
-	var bound  = GameConstants.BOUNDARY_RADIUS
+	var arena = GameConstants.ARENA_RADIUS
+	var bound = GameConstants.BOUNDARY_RADIUS
 
 	for x in range(-bound, bound + 1):
 		for y in range(-bound, bound + 1):
-			var pos  = center + Vector2(x * ts, y * ts)
+			var pos = center + Vector2(x * ts, y * ts)
 			var tile = FLOOR_SCENE if (abs(x) <= arena and abs(y) <= arena) else WALL_SCENE
 			var node = tile.instantiate()
 			node.position = pos
@@ -91,10 +91,10 @@ func _generate_arena():
 func _setup_spawners():
 	if not multiplayer.is_server():
 		return
-	var spawner             = SPAWNER_SCENE.instantiate()
-	spawner.creature_scene  = RAT_SCENE
-	spawner.spawn_interval  = 10.0
-	spawner.max_creatures   = 5
+	var spawner = SPAWNER_SCENE.instantiate()
+	spawner.creature_scene = RAT_SCENE
+	spawner.spawn_interval = 10.0
+	spawner.max_creatures = 5
 	spawner.position = GameConstants.WORLD_CENTER \
 	                 + Vector2(-3 * GameConstants.TILE_SIZE, -3 * GameConstants.TILE_SIZE)
 	add_child(spawner)
@@ -110,7 +110,7 @@ func remove_player(id: int):
 		player.queue_free()
 
 func _spawn_player(data: Array) -> Node:
-	var id  = data[0]
+	var id = data[0]
 	var pos = data[1]
 	var player = PLAYER_SCENE.instantiate()
 	player.name = str(id)
@@ -124,7 +124,7 @@ func _spawn_player(data: Array) -> Node:
 func _spawn_item_entity(data: Array) -> Node:
 	# Only set position here — item data is pushed separately via sync_to_clients
 	# RPC to avoid the Resource arriving as EncodedObjectAsID on clients.
-	var entity    = ITEM_ENTITY_SCENE.instantiate()
+	var entity = ITEM_ENTITY_SCENE.instantiate()
 	entity.position = data[1]
 	return entity
 
@@ -133,12 +133,12 @@ func _spawn_item_at_tile(item_data_path: String, tile_coords: Vector2i):
 	if not item_data:
 		push_error("World: Failed to load item data: " + item_data_path)
 		return
-	var inst  = ItemInstance_Script.new()
-	inst.data  = item_data
-	inst.count = 1
+	var inst = ItemInstance_Script.new()
+	inst.data = item_data
+	inst.count = 5
 	floor_grid.add_item(tile_coords, inst)
 
-	var pos    = GridService.tile_to_world(tile_coords)
+	var pos = GridService.tile_to_world(tile_coords)
 	var entity = $ItemSpawner.spawn([inst, pos])
 	# Set item AFTER spawn() returns — setting it inside spawn_function would
 	# include it in the spawn snapshot and cause EncodedObjectAsID on clients.
@@ -166,7 +166,7 @@ func request_move_item(entity_path: NodePath, drop_tile: Vector2i,
 	var player_node = _find_player_by_id(requester_id)
 	if player_node == null:
 		return
-	var item_tile   = GridService.world_to_tile(entity.global_position)
+	var item_tile = GridService.world_to_tile(entity.global_position)
 	var player_tile = GridService.world_to_tile(player_node.global_position)
 	var dist = (item_tile - player_tile).abs()
 	if dist.x > 1 or dist.y > 1:
@@ -194,11 +194,11 @@ func _find_player_by_id(peer_id: int) -> Node:
 # ---------------------------------------------------------------------------
 func _setup_astar():
 	var size = GameConstants.ARENA_RADIUS * 2 + 1
-	astar.region    = Rect2i(-GameConstants.ARENA_RADIUS, -GameConstants.ARENA_RADIUS, size, size)
+	astar.region = Rect2i(-GameConstants.ARENA_RADIUS, -GameConstants.ARENA_RADIUS, size, size)
 	astar.cell_size = Vector2(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE)
-	astar.offset    = GameConstants.WORLD_CENTER
+	astar.offset = GameConstants.WORLD_CENTER
 	# DIAGONAL_MODE_ALWAYS: the cost model decides when diagonals are worthwhile.
-	astar.diagonal_mode            = AStarGrid2D.DIAGONAL_MODE_ALWAYS
+	astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ALWAYS
 	# Manhattan heuristic is admissible when diagonal cost > 2.
 	astar.default_estimate_heuristic = AStarGrid2D.HEURISTIC_MANHATTAN
 	astar.update()
@@ -206,7 +206,7 @@ func _setup_astar():
 func get_astar_path(from_pos: Vector2, to_pos: Vector2,
                     exclude_entity: Node = null) -> PackedVector2Array:
 	var from_cell = GridService.world_to_tile(from_pos)
-	var to_cell   = GridService.world_to_tile(to_pos)
+	var to_cell = GridService.world_to_tile(to_pos)
 
 	# Temporarily mark occupied tiles solid so the path avoids them.
 	# Use a Dictionary as a set to avoid marking the same cell twice.

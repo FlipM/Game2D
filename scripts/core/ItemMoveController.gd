@@ -16,17 +16,16 @@ var floor_grid = null
 var item_spawner = null
 
 # Try to merge `moving` units from `entity` into the top-most stack at `drop_tile`.
-# Only the top item (last placed, highest draw order) is considered — if it is not
-# compatible, no merge happens and the caller places the item on top instead.
-# Returns true if merge occurred, false otherwise.
-func try_merge(entity, item_tile: Vector2i, drop_tile: Vector2i, moving: int) -> bool:
+# Only the top item (last placed, highest draw order) is considered.
+# Returns the number of items actually merged.
+func try_merge(entity, item_tile: Vector2i, drop_tile: Vector2i, moving: int) -> int:
 	var dest_entity = GridService.get_item_entity_at(drop_tile)
 	if dest_entity == null or dest_entity == entity or dest_entity.item == null:
-		return false
+		return 0
 	if not dest_entity.item.can_stack_with(entity.item) or dest_entity.item.is_full():
-		return false
+		return 0
 
-	var room           = dest_entity.item.data.max_stack - dest_entity.item.count
+	var room = dest_entity.item.data.max_stack - dest_entity.item.count
 	var actually_moved = min(moving, room)
 	dest_entity.item.add_to_stack(actually_moved)
 	entity.item.remove_from_stack(actually_moved)
@@ -40,6 +39,7 @@ func try_merge(entity, item_tile: Vector2i, drop_tile: Vector2i, moving: int) ->
 	else:
 		entity.update_visual()
 		entity.sync_to_clients.rpc(entity.global_position, entity.item.data.resource_path, entity.item.count)
+	
 	dest_entity.update_visual()
 	dest_entity.sync_to_clients.rpc(dest_entity.global_position, dest_entity.item.data.resource_path, dest_entity.item.count)
 
@@ -47,25 +47,31 @@ func try_merge(entity, item_tile: Vector2i, drop_tile: Vector2i, moving: int) ->
 		actually_moved,
 		dest_entity.item.data.name if dest_entity.item.data else "?",
 		item_tile, drop_tile, dest_entity.item.count])
-	return true
+	return actually_moved
 
 # Split `moving` units from `entity` at `item_tile` and create a new entity at `drop_tile`.
 # The new entity is added last in the scene tree so it renders above existing items there.
 func split(entity, item_tile: Vector2i, drop_tile: Vector2i, moving: int):
-	var new_inst      = _ItemInstance.new()
-	new_inst.data     = entity.item.data
-	new_inst.count    = moving
+	var new_inst = _ItemInstance.new()
+	new_inst.data = entity.item.data
+	new_inst.count = moving
 	entity.item.remove_from_stack(moving)
 
 	floor_grid.remove_item(item_tile, entity.item)
-	floor_grid.add_item(item_tile, entity.item)
+	if not entity.item.is_empty():
+		floor_grid.add_item(item_tile, entity.item)
 	floor_grid.add_item(drop_tile, new_inst)
 
-	var new_entity    = item_spawner.spawn([new_inst, GridService.tile_to_world(drop_tile)])
+	var new_entity = item_spawner.spawn([new_inst, GridService.tile_to_world(drop_tile)])
 	# Set item on the server entity after spawn() — not inside spawn_function.
 	new_entity.set_item(new_inst)
-	entity.update_visual()
-	entity.sync_to_clients.rpc(entity.global_position, entity.item.data.resource_path, entity.item.count)
+	
+	if entity.item.is_empty():
+		entity.queue_free()
+	else:
+		entity.update_visual()
+		entity.sync_to_clients.rpc(entity.global_position, entity.item.data.resource_path, entity.item.count)
+	
 	new_entity.sync_to_clients.rpc(new_entity.global_position, new_inst.data.resource_path, new_inst.count)
 
 	print("ItemMoveController: split %d '%s' to %s (source has %d left)" % [
@@ -93,12 +99,19 @@ func move_whole(entity, item_tile: Vector2i, drop_tile: Vector2i):
 
 # Main entry point — called from World.request_move_item after validation.
 func execute(entity, item_tile: Vector2i, drop_tile: Vector2i, moving: int):
+	var remaining = moving
+	
 	# 1. Try merging into a compatible stack already at the destination.
-	if try_merge(entity, item_tile, drop_tile, moving):
+	var merged = try_merge(entity, item_tile, drop_tile, remaining)
+	remaining -= merged
+	
+	if remaining <= 0:
 		return
-	# 2. No merge possible — split or move the whole stack to the destination.
-	#    Multiple incompatible items on the same tile are allowed (stacked visually).
-	if moving < entity.item.count:
-		split(entity, item_tile, drop_tile, moving)
+
+	# 2. No more merge possible or surplus remains — split or move the rest.
+	# If we are moving all that was left in the source (which might have been reduced by merge),
+	# we move the whole entity.
+	if remaining < entity.item.count:
+		split(entity, item_tile, drop_tile, remaining)
 	else:
 		move_whole(entity, item_tile, drop_tile)

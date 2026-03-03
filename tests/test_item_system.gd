@@ -27,6 +27,8 @@ func _run_all():
 	_test_anti_cycle()
 	_test_floor_grid_add_and_get()
 	_test_floor_grid_remove_by_ref()
+	_test_container_partial_merge_fills_multiple_slots()
+	_test_container_full_rejects_surplus()
 
 
 # ---------------------------------------------------------------------------
@@ -156,3 +158,44 @@ func _test_floor_grid_remove_by_ref():
 	_assert(pile.size() == 1, "one item remains after remove_item by ref")
 	_assert(pile[0] == shield, "correct item remains")
 	grid.free()
+
+func _test_container_partial_merge_fills_multiple_slots():
+	print("\n[container_partial_merge_fills_multiple_slots]")
+	var d = _make_data("coin", true, 10)
+	var bag_data = _make_data("bag")
+	bag_data.is_container = true
+	bag_data.container_slots = 2
+	
+	var bag = _make_instance(bag_data)
+	var stack1 = _make_instance(d, 7)
+	var stack2 = _make_instance(d, 5) # Total 12. Slot 1 takes 3, Slot 2 takes 9 (but we only have 5 left).
+	
+	bag.add_to_container(stack1)
+	# Now Slot 0 has 7 coins. Slot 1 is empty.
+	
+	var moving_stack = _make_instance(d, 8)
+	# Should add 3 to Slot 0 (making it 10) and then place the remaining 5 in Slot 1.
+	var success = bag.add_to_container(moving_stack)
+	
+	_assert(success, "add_to_container success with partial merge + new slot")
+	_assert(bag.contents[0].count == 10, "first slot is now full")
+	_assert(bag.contents[1] != null, "second slot is now occupied")
+	_assert(bag.contents[1].count == 5, "second slot has the surplus")
+
+func _test_container_full_rejects_surplus():
+	print("\n[container_full_rejects_surplus]")
+	var d = _make_data("coin", true, 10)
+	var bag_data = _make_data("bag")
+	bag_data.is_container = true
+	bag_data.container_slots = 1
+	
+	var bag = _make_instance(bag_data)
+	bag.add_to_container(_make_instance(d, 8))
+	
+	var moving_stack = _make_instance(d, 5)
+	# Slot 0 takes 2. 3 remain. No more slots.
+	var success = bag.add_to_container(moving_stack)
+	
+	_assert(not success, "add_to_container fails when no room for surplus")
+	_assert(bag.contents[0].count == 10, "first slot was still filled as much as possible")
+	_assert(moving_stack.count == 3, "moving stack still has the rejected surplus")
